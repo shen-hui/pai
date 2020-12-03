@@ -236,18 +236,14 @@ const Sidebar = ({ className, style }) => {
                 ],
               },
               {
-                name: `Feedback (version ${versionTag})`,
-                url: `https://github.com/Microsoft/pai/issues/new?${qs.stringify(
-                  {
-                    title: `Feedback ${window.PAI_VERSION}`,
-                  },
-                )}`,
+                name: `联系我们`,
+                url: `https://www.shaiic.com/`,
                 key: KEY_FEEDBACK,
                 icon: 'Feedback',
                 target: '_blank',
               },
               {
-                name: 'Plugins',
+                name: '插件',
                 isExpanded: pluginExpanded,
                 onClick: () => setPluginExpanded(!pluginExpanded),
                 icon: 'Puzzle',

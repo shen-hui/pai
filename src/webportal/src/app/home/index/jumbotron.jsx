@@ -45,7 +45,7 @@ const Jumbotron = ({ showLoginModal }) => (
             开发了人工智能资源调度平台，
             <br />
             支持Tensorflow、PyTorch、MXNet、Keras等多种深度学习计算框架，适配智慧金融、智慧物流、智慧医疗等各种人工智能场景，
-            具备为数据处理标记、模型开发、模型训练优化和部署全程保驾护航的能力，支持上万GPU调度。
+            具备为数据处理标记、模型开发、模型训练优化和部署全程保驾护航的能力。
           </div>
           <PrimaryButton
             styles={{ root: { maxWidth: '6rem' } }}
@@ -58,12 +58,12 @@ const Jumbotron = ({ showLoginModal }) => (
     {/* large */}
     <MediaQuery minWidth={BREAKPOINT + 1}>
       <div
-        className={c(t.flex, t.itemsCenter, t.justifyBetween, t.pv5, t.center)}
-        style={{ maxWidth: '60rem' }}
+        className={c(t.flex, t.itemsCenter, t.justifyBetween, t.pv5, t.ph4, t.center)}
+        style={{ maxWidth: '95%' }}
       >
         <div
-          className={c(t.flex, t.flexColumn, t.pr4)}
-          style={{ minWidth: '20rem' }}
+          className={c(t.flex, t.flexColumn)}
+          style={{ minWidth: '20rem', maxWidth: '60%' }}
         >
           <div className={c(FontClassNames.superLarge)}>
             人工智能资源调度管理平台
@@ -73,7 +73,7 @@ const Jumbotron = ({ showLoginModal }) => (
             开发了人工智能资源调度平台，
             <br />
             支持Tensorflow、PyTorch、MXNet、Keras等多种深度学习计算框架，适配智慧金融、智慧物流、智慧医疗等各种人工智能场景，
-            具备为数据处理标记、模型开发、模型训练优化和部署全程保驾护航的能力，支持上万GPU调度。
+            具备为数据处理标记、模型开发、模型训练优化和部署全程保驾护航的能力。
           </div>
           <PrimaryButton
             styles={{ root: { maxWidth: '6rem' } }}
