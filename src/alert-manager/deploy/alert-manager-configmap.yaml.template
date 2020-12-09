@@ -30,7 +30,7 @@ data:
       group_wait: 30s
       group_interval: 5m
       repeat_interval: {{ cluster_cfg["alert-manager"]["repeat-interval"] }}
-      group_by: [alertname, alertstate]
+      group_by: [alertname, alertstate, severity]
 
       routes:
       - receiver: pai-cordon-nodes
@@ -77,27 +77,29 @@ data:
     {% for receiver in cluster_cfg["alert-manager"]["customized-receivers"] %}
     - name: {{ receiver.name}}
       webhook_configs:
-      {% if 'email-admin' in receiver.actions %}
-      - url: 'http://localhost:{{ cluster_cfg["alert-manager"]["alert-handler"]["port"] }}/alert-handler/send-email-to-admin'
+      {% if (receiver["actions"]["email-admin"] is defined) and ('email-admin' in cluster_cfg["alert-manager"]["actions-available"]) %}
+      {% set template = receiver["actions"]["email-admin"]["template"] %}
+      - url: 'http://localhost:{{ cluster_cfg["alert-manager"]["alert-handler"]["port"] }}/alert-handler/send-email-to-admin/?template={{ template }}'
         send_resolved: true
       {% endif %}
 
-      {% if 'email-user' in receiver.actions %}
-      - url: 'http://localhost:{{ cluster_cfg["alert-manager"]["alert-handler"]["port"] }}/alert-handler/send-email-to-user'
-        send_resolved: true
+      {% if (receiver["actions"]["email-user"] is defined) and ('email-user' in cluster_cfg["alert-manager"]["actions-available"]) %}
+      {% set template = receiver["actions"]["email-user"]["template"] %}
+      - url: 'http://localhost:{{ cluster_cfg["alert-manager"]["alert-handler"]["port"] }}/alert-handler/send-email-to-user/?template={{ template }}'
+        send_resolved: false
         http_config:
           bearer_token: {{ cluster_cfg["alert-manager"]["alert-handler"]["pai-bearer-token"] }}
       {% endif %}
 
-      {% if 'stop-jobs' in receiver.actions %}
+      {% if (receiver["actions"]["stop-jobs"] is defined) and ('stop-jobs' in cluster_cfg["alert-manager"]["actions-available"]) %}
       - url: 'http://localhost:{{ cluster_cfg["alert-manager"]["alert-handler"]["port"] }}/alert-handler/stop-jobs'
         send_resolved: false
         http_config:
           bearer_token: {{ cluster_cfg["alert-manager"]["alert-handler"]["pai-bearer-token"] }}
       {% endif %}
 
-      {% if 'tag-jobs' in receiver.actions %}
-      {% for tag in receiver["tags"] %}
+      {% if (receiver["actions"]["tag-jobs"] is defined) and ('tag-jobs' in cluster_cfg["alert-manager"]["actions-available"]) %}
+      {% for tag in receiver["actions"]["tag-jobs"]["tags"] %}
       - url: 'http://localhost:{{ cluster_cfg["alert-manager"]["alert-handler"]["port"] }}/alert-handler/tag-jobs/{{ tag }}'
         send_resolved: false
         http_config:
@@ -105,9 +107,17 @@ data:
       {% endfor %}
       {% endif %}
 
-      {% if 'cordon-nodes' in receiver.actions %}
+      {% if (receiver["actions"]["cordon-nodes"] is defined) and ('cordon-nodes' in cluster_cfg["alert-manager"]["actions-available"]) %}
       - url: 'http://localhost:{{ cluster_cfg["alert-manager"]["alert-handler"]["port"] }}/alert-handler/cordon-nodes'
         send_resolved: false
       {% endif %}
     
     {% endfor %}
+
+    inhibit_rules:
+    - source_match:
+        alertname: 'NodeNotReady'
+      target_match_re:
+        alertname: ^PaiServicePodNotRunning|PaiServicePodNotReady$
+      # Apply inhibition if `node_name` is the same.
+      equal: ['node_name']

@@ -20,7 +20,8 @@ const status = require('statuses');
 
 const asyncHandler = require('@pai/middlewares/v2/asyncHandler');
 const createError = require('@pai/utils/error');
-const job = require('@pai/models/v2/job');
+const { job, log } = require('@pai/models/v2/job');
+const logger = require('@pai/config/logger');
 const { Op } = require('sequelize');
 
 const list = asyncHandler(async (req, res) => {
@@ -222,35 +223,39 @@ const getSshInfo = asyncHandler(async (req, res) => {
 });
 
 const addTag = asyncHandler(async (req, res) => {
-  // only admin users can add tags
-  if (!req.user.admin) {
+  const userName = req.user.username;
+  const admin = req.user.admin;
+  if (req.params.frameworkName.split('~')[0] === userName || admin) {
+    await job.addTag(req.params.frameworkName, req.body.value);
+    res.status(status('OK')).json({
+      status: status('OK'),
+      message: `Add tag ${req.body.value} for job ${req.params.frameworkName} successfully.`,
+    });
+  } else {
     throw createError(
-      'Unauthorized',
-      'UnauthorizedUserError',
-      'Only admin users are allowed to do this operation.',
+      'Forbidden',
+      'ForbiddenUserError',
+      `User ${userName} is not allowed to add tag to job ${req.params.frameworkName}.`,
     );
   }
-  await job.addTag(req.params.frameworkName, req.body.value);
-  res.status(status('OK')).json({
-    status: status('OK'),
-    message: `Add tag ${req.body.value} for job ${req.params.frameworkName} successfully.`,
-  });
 });
 
 const deleteTag = asyncHandler(async (req, res) => {
-  // only admin users can delete tags
-  if (!req.user.admin) {
+  const userName = req.user.username;
+  const admin = req.user.admin;
+  if (req.params.frameworkName.split('~')[0] === userName || admin) {
+    await job.deleteTag(req.params.frameworkName, req.body.value);
+    res.status(status('OK')).json({
+      status: status('OK'),
+      message: `Delete tag ${req.body.value} from job ${req.params.frameworkName} successfully.`,
+    });
+  } else {
     throw createError(
-      'Unauthorized',
-      'UnauthorizedUserError',
-      'Only admin users are allowed to do this operation.',
+      'Forbidden',
+      'ForbiddenUserError',
+      `User ${userName} is not allowed to delete tag from job ${req.params.frameworkName}.`,
     );
   }
-  await job.deleteTag(req.params.frameworkName, req.body.value);
-  res.status(status('OK')).json({
-    status: status('OK'),
-    message: `Delete tag ${req.body.value} from job ${req.params.frameworkName} successfully.`,
-  });
 });
 
 const getEvents = asyncHandler(async (req, res) => {
@@ -284,6 +289,29 @@ const getEvents = asyncHandler(async (req, res) => {
   res.json(data);
 });
 
+const getLogs = asyncHandler(async (req, res) => {
+  try {
+    const data = await log.getLogListFromLogManager(
+      req.params.frameworkName,
+      req.params.jobAttemptId,
+      req.params.taskRoleName,
+      req.params.taskIndex,
+      req.params.taskAttemptId,
+      req.query['tail-mode'],
+    );
+    res.json(data);
+  } catch (error) {
+    logger.error(`Got error when retrieving log list, error: ${error}`);
+    throw error.code === 'NoTaskLogErr'
+      ? error
+      : createError(
+          'Internal Server Error',
+          'UnknownError',
+          'Failed to get log list',
+        );
+  }
+});
+
 // module exports
 module.exports = {
   list,
@@ -295,4 +323,5 @@ module.exports = {
   addTag,
   deleteTag,
   getEvents,
+  getLogs,
 };

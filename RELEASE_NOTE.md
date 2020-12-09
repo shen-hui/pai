@@ -1,5 +1,58 @@
 # OpenPAI Release Note
 
+## Dec 2020 (version 1.4.0)
+
+- multi-cluster (https://github.com/microsoft/pai/issues/4929)
+  - Support job transfer (#5082, #5088)
+- Autoscaler 
+  - Update docs for Cluster Autoscaler on AKS Engine (#5057)
+- Log Collection (https://github.com/microsoft/pai/issues/4992)
+    - Rest API
+    - Webportal
+- Https configuration document (#5076, #5078)
+- Marketplace (https://github.com/microsoft/openpaimarketplace/issues/73)
+  - Data
+    - Move NFS to Azure Blob as backend
+    - Upload Job output to Azure Blob
+    - Download data from azure blob to local
+    - Use Azure storage SDK for privacy
+    - Refactor data use logic after change storage to blob
+    - Update project development doc and manual
+  - Service Deployment
+    - Start Local Rest Server
+    - Deployed Rest Server in PAI
+    - Start database and save items into it
+    - Register in PAI pylon (#5066)
+    - Add azure storage to service configuration (#5104)
+- Web Portal
+  - Fix stop job button issue #5079
+- Admin Experience
+  - Prometheus alert rules update (#5021)
+  - Refine deployment process (#5077, #5085) 
+- Others
+  - Fix `updateUserGroupList` API issue (#5121) 
+  - Fix hived config issue caused by k8s coreDNS deployment (#5071)
+
+## Nov 2020 (version 1.3.0)
+
+- Marketplace
+  - New templates in marketplace (https://github.com/microsoft/openpaimarketplace/issues/60)
+- HiveD Scheduler
+  - Support cluster autoscale with HiveD scheduler on AKS (#4868)
+  - Support dynamic sku types for different vc on webportal (#4900)
+- Advanced job debug mode
+  - Add per task retry history (https://github.com/microsoft/frameworkcontroller/pull/62, #4958, #4966)
+  - Expose Kubernetes events (#4939, #4975)
+- GPU monitoring and utilization
+  - Support job tagging (#4924)
+  - Stop low GPU utilization job with alert-manager (#4940)
+  - Cordon node with GPU ECC Errors (#4942)
+- Documentation
+  - Fix document according to DRI tickets (#4828)
+  - Add distributed examples (#4821)
+- Webportal
+  - Add help info for items on webportal (#4950)
+
 ## Oct 2020 (version 1.2.1)
 
 [minor release with hot fix](https://github.com/microsoft/pai/releases/tag/v1.2.1).

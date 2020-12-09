@@ -43,7 +43,7 @@ export const NotificationButton = () => {
 
   useEffect(() => {
     let canceled = false;
-    const alertsUrl = `${webportalConfig.alertManagerUri}/api/v1/alerts?silenced=false`;
+    const alertsUrl = `${webportalConfig.alertManagerUri}/api/v1/alerts?silenced=false&inhibited=false`;
     const work = async () => {
       try {
         const result = await fetch(alertsUrl);
@@ -140,7 +140,7 @@ export const NotificationButton = () => {
               <div className={classNames.itemCell} data-is-focusable={true}>
                 {'发生时间: ' + new Date(item.startsAt).toLocaleString()}
                 <br />
-                {'总数: ' + item.annotations.summary}
+                {item.labels.severity + ':' + item.annotations.summary}
               </div>
             );
           }}

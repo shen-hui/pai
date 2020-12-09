@@ -29,9 +29,13 @@ import {
   CommandBarButton,
   PrimaryButton,
   TooltipHost,
+  Text,
   DirectionalHint,
+  Dialog,
+  DialogFooter,
   Stack,
   Link,
+  Icon,
 } from 'office-ui-fabric-react';
 import {
   DetailsList,
@@ -48,7 +52,7 @@ import t from '../../../../../components/tachyons.scss';
 
 import Context from './context';
 import Timer from './timer';
-import { getContainerLog } from '../conn';
+import { getContainerLog, getContainerLogList } from '../conn';
 import config from '../../../../../config/webportal.config';
 import MonacoPanel from '../../../../../components/monaco-panel';
 import StatusBadge from '../../../../../components/status-badge';
@@ -130,6 +134,32 @@ PortTooltipContent.propTypes = {
   ports: PropTypes.object,
 };
 
+const LogDialogContent = ({ urlLists }) => {
+  const lists = [];
+  for (const p of urlLists) {
+    lists.push(p);
+  }
+  if (lists.length === 0) {
+    return <Stack>No log file generated or log files be rotated</Stack>;
+  }
+  const urlpairs = lists.map((lists, index) => (
+    <Stack key={`log-list-${index}`}>
+      <Link
+        href={lists.uri}
+        target='_blank'
+        styles={{ root: [FontClassNames.mediumPlus] }}
+      >
+        <Icon iconName='TextDocument'></Icon> {lists.name}
+      </Link>
+    </Stack>
+  ));
+  return urlpairs;
+};
+
+LogDialogContent.propTypes = {
+  urlLists: PropTypes.array,
+};
+
 export default class TaskRoleContainerList extends React.Component {
   constructor(props) {
     super(props);
@@ -137,15 +167,20 @@ export default class TaskRoleContainerList extends React.Component {
       monacoProps: null,
       monacoTitle: '',
       monacoFooterButton: null,
-      logUrl: null,
+      fullLogUrls: {},
+      tailLogUrls: {},
+      logListUrl: null,
+      logType: null,
       items: props.tasks,
       ordering: { field: null, descending: false },
-      hideDialog: true,
+      hideAllLogsDialog: true,
     };
 
     this.showSshInfo = this.showSshInfo.bind(this);
+    this.showAllLogDialog = this.showAllLogDialog.bind(this);
     this.onDismiss = this.onDismiss.bind(this);
-    this.showContainerLog = this.showContainerLog.bind(this);
+    this.convertObjectFormat = this.convertObjectFormat.bind(this);
+    this.showContainerTailLog = this.showContainerTailLog.bind(this);
     this.onRenderRow = this.onRenderRow.bind(this);
     this.logAutoRefresh = this.logAutoRefresh.bind(this);
     this.onColumnClick = this.onColumnClick.bind(this);
@@ -159,12 +194,12 @@ export default class TaskRoleContainerList extends React.Component {
   }
 
   logAutoRefresh() {
-    const { logUrl } = this.state;
-    getContainerLog(logUrl)
+    const { fullLogUrls, tailLogUrls, logListUrl, logType } = this.state;
+    getContainerLog(tailLogUrls, fullLogUrls, logType)
       .then(({ text, fullLogLink }) =>
         this.setState(
           prevState =>
-            prevState.logUrl === logUrl && {
+            prevState.tailLogUrls[logType] === tailLogUrls[logType] && {
               monacoProps: { value: text },
               monacoFooterButton: (
                 <PrimaryButton
@@ -179,14 +214,17 @@ export default class TaskRoleContainerList extends React.Component {
             },
         ),
       )
-      .catch(err =>
+      .catch(err => {
         this.setState(
           prevState =>
-            prevState.logUrl === logUrl && {
+            prevState.tailLogUrls[logType] === tailLogUrls[logType] && {
               monacoProps: { value: err.message },
             },
-        ),
-      );
+        );
+        if (err.message === '403') {
+          this.showContainerTailLog(logListUrl, logType);
+        }
+      });
   }
 
   onDismiss() {
@@ -194,7 +232,8 @@ export default class TaskRoleContainerList extends React.Component {
       monacoProps: null,
       monacoTitle: '',
       monacoFooterButton: null,
-      logUrl: null,
+      fullLogUrls: {},
+      tailLogUrls: {},
     });
   }
 
@@ -213,40 +252,52 @@ export default class TaskRoleContainerList extends React.Component {
     }
   }
 
-  showContainerLog(logUrl, logType) {
-    let title;
-    let logHint;
+  convertObjectFormat(logUrls) {
+    const logs = {};
+    for (const p in logUrls.locations) {
+      logs[logUrls.locations[p].name] = logUrls.locations[p].uri;
+    }
+    return logs;
+  }
 
-    if (config.logType === 'yarn') {
-      logHint = '最近4KB';
-    } else if (config.logType === 'log-manager') {
-      logHint = '最近16KB';
-    } else {
-      logHint = '';
-    }
-    switch (logType) {
-      case 'stdout':
-        title = `标准输出 (${logHint})`;
-        break;
-      case 'stderr':
-        title = `标准错误 (${logHint})`;
-        break;
-      case 'stdall':
-        title = `用户日志 (${logHint}. 注意: 查看合并日志时，日志顺序可能会乱序`;
-        break;
-      default:
-        throw new Error(`不支持日志类型`);
-    }
-    this.setState(
-      {
-        monacoProps: { value: 'Loading...' },
-        monacoTitle: title,
-        logUrl,
-      },
-      () => {
-        this.logAutoRefresh(); // start immediately
-      },
-    );
+  showContainerTailLog(logListUrl, logType) {
+    let title;
+    let logHint = '';
+    this.setState({ logListUrl: logListUrl });
+    getContainerLogList(logListUrl)
+      .then(({ fullLogUrls, tailLogUrls }) => {
+        if (config.logType === 'log-manager') {
+          logHint = '最近16KB';
+        }
+        switch (logType) {
+          case 'stdout':
+            title = `标准输出 (${logHint})`;
+            break;
+          case 'stderr':
+            title = `标准错误 (${logHint})`;
+            break;
+          case 'all':
+            title = `用户日志 (${logHint}. 注意: 查看合并日志时，日志顺序可能会乱序)`;
+            break;
+          default:
+            throw new Error(`不支持日志类型`);
+        }
+        this.setState(
+          {
+            monacoProps: { value: '加载中...' },
+            monacoTitle: title,
+            fullLogUrls: this.convertObjectFormat(fullLogUrls),
+            tailLogUrls: this.convertObjectFormat(tailLogUrls),
+            logType,
+          },
+          () => {
+            this.logAutoRefresh(); // start immediately
+          },
+        );
+      })
+      .catch(err => {
+        this.setState({ monacoProps: { value: err.message } });
+      });
   }
 
   showSshInfo(id, containerPorts, containerIp) {
@@ -352,6 +403,19 @@ export default class TaskRoleContainerList extends React.Component {
     }
   }
 
+  showAllLogDialog(logListUrl) {
+    const { hideAllLogsDialog } = this.state;
+
+    getContainerLogList(logListUrl)
+      .then(({ fullLogUrls, _ }) => {
+        this.setState({
+          hideAllLogsDialog: !hideAllLogsDialog,
+          fullLogUrls: fullLogUrls,
+        });
+      })
+      .catch(() => this.setState({ hideAllLogsDialog: !hideAllLogsDialog }));
+  }
+
   getTaskPropertyFromColumnKey(item, key) {
     if (key === 'exitType') {
       return !isNil(item.containerExitSpec) &&
@@ -424,7 +488,9 @@ export default class TaskRoleContainerList extends React.Component {
       monacoTitle,
       monacoProps,
       monacoFooterButton,
-      logUrl,
+      fullLogUrls,
+      tailLogUrls,
+      hideAllLogsDialog,
       items,
     } = this.state;
     const { showMoreDiagnostics } = this.props;
@@ -443,7 +509,9 @@ export default class TaskRoleContainerList extends React.Component {
         </ThemeProvider>
         {/* Timer */}
         <Timer
-          interval={isNil(monacoProps) || isEmpty(logUrl) ? null : interval}
+          interval={
+            isNil(monacoProps) || isEmpty(tailLogUrls) ? null : interval
+          }
           func={this.logAutoRefresh}
         />
         {/* Monaco Editor Panel */}
@@ -454,6 +522,32 @@ export default class TaskRoleContainerList extends React.Component {
           monacoProps={monacoProps}
           footer={monacoFooterButton}
         />
+        <Dialog
+          hidden={hideAllLogsDialog}
+          onDismiss={() =>
+            this.setState({ hideAllLogsDialog: !hideAllLogsDialog })
+          }
+          minWidth='500px'
+        >
+          <Stack gap='m'>
+            <Text variant='xLarge'>All Logs:</Text>
+            <LogDialogContent
+              urlLists={
+                !isNil(fullLogUrls) && !isNil(fullLogUrls.locations)
+                  ? fullLogUrls.locations
+                  : []
+              }
+            />
+          </Stack>
+          <DialogFooter>
+            <PrimaryButton
+              onClick={() =>
+                this.setState({ hideAllLogsDialog: !hideAllLogsDialog })
+              }
+              text='Close'
+            />
+          </DialogFooter>
+        </Dialog>
       </div>
     );
   }
@@ -624,8 +718,8 @@ export default class TaskRoleContainerList extends React.Component {
                 iconProps={{ iconName: 'TextDocument' }}
                 text='标准输出'
                 onClick={() =>
-                  this.showContainerLog(
-                    `${item.containerLog}user.pai.stdout`,
+                  this.showContainerTailLog(
+                    `${config.restServerUri}${item.containerLog}`,
                     'stdout',
                   )
                 }
@@ -640,8 +734,8 @@ export default class TaskRoleContainerList extends React.Component {
                 iconProps={{ iconName: 'Error' }}
                 text='标准错误'
                 onClick={() =>
-                  this.showContainerLog(
-                    `${item.containerLog}user.pai.stderr`,
+                  this.showContainerTailLog(
+                    `${config.restServerUri}${item.containerLog}`,
                     'stderr',
                   )
                 }
@@ -662,22 +756,20 @@ export default class TaskRoleContainerList extends React.Component {
                       iconProps: { iconName: 'TextDocument' },
                       disabled: isNil(item.containerId),
                       onClick: () =>
-                        this.showContainerLog(
-                          `${item.containerLog}user.pai.all`,
-                          'stdall',
+                        this.showContainerTailLog(
+                          `${config.restServerUri}${item.containerLog}`,
+                          'all',
                         ),
                     },
                     {
                       key: 'trackingPage',
-                      name:
-                        config.launcherType === 'yarn'
-                          ? '查看Yarn监控'
-                          : '浏览日志文件夹',
+                      name: '查看所有日志',
                       iconProps: { iconName: 'Link' },
-                      href: isNil(item.containerLog)
-                        ? item.containerLog
-                        : item.containerLog.replace('/tail/', '/'),
-                      target: '_blank',
+                      onClick: () => {
+                        this.showAllLogDialog(
+                          `${config.restServerUri}${item.containerLog}`,
+                        );
+                      },
                     },
                   ],
                 }}

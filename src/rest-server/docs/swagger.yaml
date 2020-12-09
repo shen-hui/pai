@@ -11,6 +11,8 @@ info:
     Version 2.1.0: add add/delete tag api; add tags field in get job detail and get job list; add tags filter in get job list
     Version 2.1.1: add get event api
     Version 2.2.0: add get task status api; add jobAttempId filter to job status api and extend job detail schema
+    Version 2.2.1: a user can add/delete tags to/from his/her own jobs
+    version 2.2.2: add get task logs api
   license:
     name: MIT License
     url: "https://github.com/microsoft/pai/blob/master/LICENSE"
@@ -441,7 +443,6 @@ paths:
       summary: Update user's own profile.
       description: >-
         Update user's own profile in the system.
-        Only allowed in basic mode
       operationId: updateUserSelf
       security:
         - bearerAuth: []
@@ -478,6 +479,13 @@ paths:
                         Old password.
                         When newPassword exists, it's required.
                         When newPassword doesn't exists, it's useless.
+                    extension:
+                      type: object
+                      description: >-
+                        Extension fields.
+                        Be allowed in both oidc and basic mode.
+                        When patch is false, it's required.
+                        When patch is true, it's optional.
                 patch:
                   type: boolean
                   default: false
@@ -717,6 +725,8 @@ paths:
                   description: description
                   externalName: externalName
                   extension: {}
+        "401":
+          $ref: "#/components/responses/UnauthorizedUserError"
         "500":
           $ref: "#/components/responses/UnknownError"
     post:
@@ -922,6 +932,8 @@ paths:
                   clusterAdmin: false
         "401":
           $ref: "#/components/responses/UnauthorizedUserError"
+        "403":
+          $ref: "#/components/responses/ForbiddenUserError"
         "500":
           $ref: "#/components/responses/UnknownError"
   /api/v2/virtual-clusters:
@@ -1386,7 +1398,7 @@ paths:
     put:
       tags:
         - job
-      summary: Add a tag to a job. Only admin users are authorized.
+      summary: Add a tag to a job. Admin users can add tags to any job. A non-admin user can add tags to his/her own jobs.
       description: Add a tag to a job.
       operationId: addTag
       security:
@@ -1424,7 +1436,7 @@ paths:
     delete:
       tags:
         - job
-      summary: Delete a tag from a job. Only admin users are authorized.
+      summary: Delete a tag from a job. Admin users can delete tags from any job. A non-admin user can delete tags from his/her own jobs.
       description: Delete a tag from a job.
       operationId: deleteTag
       security:
@@ -1478,6 +1490,8 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: "#/components/parameters/user"
+        - $ref: "#/components/parameters/job"
         - name: type
           in: query
           description: filter events with type. Could be "Warning" or "Normal".
@@ -1691,7 +1705,7 @@ paths:
       description: Get task status.
       operationId: getTask
       security:
-        - bearerAuth: [] 
+        - bearerAuth: []
       parameters:
       - $ref: "#/components/parameters/user"
       - $ref: "#/components/parameters/job"
@@ -1731,7 +1745,7 @@ paths:
                       ssh: 37508
                       http: 24661
                     containerGpus: null
-                    containerLog: http://10.151.40.34:9103/log-manager/tail/admin/9893b6e0f9f5997f4a82f23bef39bf32/taskrole/a9f9f1f2-5e43-4423-88c3-022433b8cd7c/
+                    containerLog: /api/v2/jobs/admin~admin_444da84f/attempts/0/taskRoles/taskrole/taskIndex/0/attempts/2/logs
                     containerExitCode: -220
                     containerExitSpec:
                       code: -220
@@ -1758,7 +1772,7 @@ paths:
                       ssh: 37508
                       http: 24661
                     containerGpus: null
-                    containerLog: http://10.151.40.34:9103/log-manager/tail/admin/9893b6e0f9f5997f4a82f23bef39bf32/taskrole/a9f9f1f2-5e43-4423-88c3-022433b8cd7c/
+                    containerLog: /api/v2/jobs/admin~admin_444da84f/attempts/0/taskRoles/taskrole/taskIndex/0/attempts/2/logs
                     containerExitCode: -220
                     containerExitSpec:
                       code: -220
@@ -1775,6 +1789,46 @@ paths:
                     containerExitDiagnostics: Stop to complete current FrameworkAttempt
         "404":
           $ref: "#/components/responses/NoTaskError"
+        "500":
+          $ref: "#/components/responses/UnknownError"
+  "/api/v2/jobs/{user}~{job}/attempts/{jobAttemptId}/taskRoles/{taskRoleName}/taskIndex/{taskIndex}/attempts/{taskAttemptId}/logs":
+    get:
+      tags:
+        - job
+      summary: Get task log list.
+      description: Get task log list.
+      operationId: getTaskLogs
+      security:
+        - bearerAuth: []
+      parameters:
+      - $ref: "#/components/parameters/user"
+      - $ref: "#/components/parameters/job"
+      - $ref: "#/components/parameters/jobAttemptId"
+      - $ref: "#/components/parameters/taskRoleName"
+      - $ref: "#/components/parameters/taskIndex"
+      - $ref: "#/components/parameters/taskAttemptId"
+      - name: tailMode
+        in: query
+        description: getting log content via tail mode. Could be "true" or "false"
+        schema:
+          type: boolean
+      responses:
+        "200":
+          description: Succeeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PodLogInfo"
+              example:
+                locations:
+                - name: stderr
+                  uri: "https://mater_ip/log-manager/node_ip/api/v1/logs/user.pai.stderr?username=user&framework-name=34775529adebae576fbc0bf48d835386&pod-uid=07cdd036-1a7c-11eb-830b-000d3ab25bb6&taskrole=taskrole&token=token"
+                - name: all
+                  uri:  "https://mater_ip/log-manager/node_ip/api/v1/logs/user.pai.all?username=user&framework-name=34775529adebae576fbc0bf48d835386&pod-uid=07cdd036-1a7c-11eb-830b-000d3ab25bb6&taskrole=taskrole&token=token"
+                - name: stdout
+                  uri: "https://mater_ip/log-manager/node_ip/api/v1/logs/user.pai.stdout?username=user&framework-name=34775529adebae576fbc0bf48d835386&pod-uid=07cdd036-1a7c-11eb-830b-000d3ab25bb6&taskrole=taskrole&token=token"
+        "404":
+          $ref: "#/components/responses/NoTaskLogError"
         "500":
           $ref: "#/components/responses/UnknownError"
   /api/v2/kubernetes/nodes:
@@ -1901,14 +1955,21 @@ components:
       in: path
       description: task role name
       required: true
-      schema: 
+      schema:
         type: string
     taskIndex:
       name: taskIndex
       in: path
       description: task index
       required: true
-      schema: 
+      schema:
+        type: string
+    taskAttemptId:
+      name: taskAttemptId
+      in: path
+      description: task attempt id
+      required: true
+      schema:
         type: string
   schemas:
     Response:
@@ -2254,7 +2315,7 @@ components:
               nullable: true
               description: >
                 job completed time for last attempt, in number of milliseconds
-                since the Unix Epoch. 
+                since the Unix Epoch.
                 To get durations for last attempt:
                   wholeDuration = completedTime - createdTime;
                   runningDuration = appCompletedTime - appLaunchedTime;
@@ -3014,7 +3075,7 @@ components:
                 type: string
                 nullable: true
                 description: container exit diagnostics
-              hived: 
+              hived:
                 type: object
                 nullable: true
                 properties:
@@ -3060,6 +3121,20 @@ components:
         - storageConfig
         - email
         - extension
+    PodLogInfo:
+      type: object
+      properties:
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: log name.
+              uri:
+                type: string
+                description: log content lnk.
   responses:
     InvalidParametersError:
       description: InvalidParametersError
@@ -3219,6 +3294,17 @@ components:
               value:
                 code: NoJobSshInfoError
                 message: "SSH info of job {job} is not found."
+    NoTaskLogError:
+      description: NoTaskLogError
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Response"
+          examples:
+            NoJobSshInfoError:
+              value:
+                code: NoTaskLogError
+                message: "Log of task is not found."
     ConflictUserError:
       description: ConflictUserError
       content:

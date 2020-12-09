@@ -1,4 +1,4 @@
-# 如何使用
+# 如何使用报警系统
 
 OpenPAI自带一个报警系统。该系统有一些预先定义好的报警规则（alert rules）和相应的处理措施（alert actions）。管理员也可以自定义这些规则和措施。在此文档中，我们将详细介绍该报警系统。
 
@@ -44,12 +44,14 @@ prometheus:
         - alert: PAIJobGpuPercentLowerThan0_3For1h
           expr: avg(task_gpu_percent{virtual_cluster=~"default"}) by (job_name) < 0.3
           for: 1h
+          labels:
+            severity: warn
           annotations:
             summary: "{{$labels.job_name}} has a job gpu percent lower than 30% for 1 hour"
             description: Monitor job level gpu utilization in certain virtual clusters.
 ```
 
-当在`default`虚拟集群上的任务有一个GPU利用率低于`30%`的task，且持续时间超过`1小时`时，将会触发`PAIJobGpuPercentLowerThan0_3For1h`报警。这里我们在报警规则中使用了`task_gpu_percent`指标，这个指标描述了OpenPAI任务单个task的GPU使用率。
+当在`default`虚拟集群上的任务有一个GPU利用率低于`30%`的task，且持续时间超过`1小时`时，将会触发`PAIJobGpuPercentLowerThan0_3For1h`报警。这里我们在报警规则中使用了`task_gpu_percent`指标，这个指标描述了OpenPAI任务单个task的GPU使用率。 您可以用`labels.severity`域来定义报警的严重程度，可选的严重程度有`info`、`warn`、`error`或`fatal`。这里我们使用`warn`。
 
 为了使设置生效，您需要将修改后的设置上传到集群中，并重启`prometheus`服务。请在[dev box容器](./basic-management-operations.md#pai-service-management-and-paictl)中遵循以下步骤：
 
@@ -89,13 +91,14 @@ alert-manager:
         alertname: PAIJobGpuPercentLowerThan0_3For1h
   customized-receivers:
   - name: "pai-email-admin-user-and-stop-job"
-    actions:
-      - email-admin
-      - email-user
-      - stop-jobs
-      - tag-jobs
-    tags: 
-      - 'stopped-by-alert-manager'
+    actions: 
+      email-admin:
+      email-user:  
+        template: 'kill-low-efficiency-job-alert'
+      stop-jobs:
+      tag-jobs:
+        tags: 
+        - 'stopped-by-alert-manager'
 
 ```
 
@@ -140,15 +143,16 @@ alert-manager:
     - receiver: pai-email-admin-user-and-stop-job
       match:
         alertname: PAIJobGpuPercentLowerThan0_3For1h
-  customized-receivers:、
+  customized-receivers:
   - name: "pai-email-admin-user-and-stop-job"
-    actions:、
-      - email-admin
-      - email-user
-      - stop-jobs
-      - tag-jobs
-    tags: 
-      - 'stopped-by-alert-manager'
+    actions: 
+      email-admin:
+      email-user:  
+        template: 'kill-low-efficiency-job-alert'
+      stop-jobs:
+      tag-jobs:
+        tags: 
+        - 'stopped-by-alert-manager'
   ......
 ```
 
@@ -164,8 +168,17 @@ alert-manager:
 而关于`receivers`的定义，您可以遵循下面的步骤：
 
 - 在 `name` 字段给它起一个名字
-- 在`actions`字段列出所有您希望使用的处理措施
-- 如果`tag-jobs`是这个`receiver`的一个处理措施，您需要在`tags`字段中添加您希望有的tag。
+- 在`actions`字段列出所有您希望使用的处理措施，并且给这些处理措施添加需要的参数。处理措施和相应的参数请参考下面的列表：
+  - `email-admin`：
+    - `template`：可选参数。可以是'general-template'或'kill-low-efficiency-job-alert'。默认是'general-template'。
+  -  `email-user`：
+    - `template`：可选参数。可以是'general-template'或'kill-low-efficiency-job-alert'。默认是'general-template'。
+  - `cordon-nodes`：没有需要填写的参数。
+  - `stop-jobs`：没有需要填写的参数。
+  - `tag-jobs`：
+    - `tags`：必须要填写的参数，表示添加tag的列表。
+
+您还可以在 `pai/src/alert-manager/deploy/alert-templates`目录中添加自定义的邮件模板。一个模板须包含两个文件：`html.ejs`，为邮件正文模板；`subject.ejs`，为邮件主题模板。模板所在的文件夹的名字就是这个模板的名字。
 
 为了使设置生效，您需要将修改后的设置上传到集群中，并重启`alert-manager`服务。请在[dev box容器](./basic-management-operations.md#pai-service-management-and-paictl)中遵循以下步骤：
 
